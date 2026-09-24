@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"testing"
 
@@ -35,9 +36,12 @@ func (f *fakeProductRepo) FindByID(_ context.Context, id uint) (*model.Product, 
 	return nil, util.ErrNotFound
 }
 
-func (f *fakeProductRepo) List(_ context.Context, category, campus, keyword, status string, page, pageSize int) ([]model.Product, int64, error) {
+func (f *fakeProductRepo) List(_ context.Context, sellerID uint, category, campus, keyword, status string, page, pageSize int) ([]model.Product, int64, error) {
 	var out []model.Product
 	for _, p := range f.products {
+		if sellerID != 0 && p.SellerID != sellerID {
+			continue
+		}
 		if category != "" && p.Category != category {
 			continue
 		}
@@ -58,6 +62,34 @@ func (f *fakeProductRepo) UpdateStatus(_ context.Context, id uint, status string
 		return err
 	}
 	f.products[id].Status = status
+	return nil
+}
+
+// UpdateWithRevision emulates the optimistic-lock UPDATE of the GORM repo.
+func (f *fakeProductRepo) UpdateWithRevision(_ context.Context, id, expectedRevision uint, fields map[string]interface{}) error {
+	p, ok := f.products[id]
+	if !ok {
+		return util.ErrNotFound
+	}
+	if p.Revision != expectedRevision || p.Status != constants.ProductStatusOnSale {
+		return util.ErrConflict
+	}
+	if v, ok := fields["title"].(string); ok {
+		p.Title = v
+	}
+	if v, ok := fields["description"].(string); ok {
+		p.Description = v
+	}
+	if v, ok := fields["price"].(float64); ok {
+		p.Price = v
+	}
+	if v, ok := fields["condition"].(string); ok {
+		p.Condition = v
+	}
+	if v, ok := fields["trade_location"].(string); ok {
+		p.TradeLocation = v
+	}
+	p.Revision++
 	return nil
 }
 
@@ -102,4 +134,54 @@ func TestProductServiceRemoveOwnership(t *testing.T) {
 	if removed.Status != constants.ProductStatusRemoved {
 		t.Fatalf("expected removed status")
 	}
+}
+
+func TestProductServiceUpdate(t *testing.T) {
+	repo := newFakeProductRepo()
+	svc := NewProductService(repo, slog.Default())
+	created, _ := svc.Create(context.Background(), 1, &dto.CreateProductRequest{Title: "旧标题", Price: 10, Category: constants.ProductCategoryBooks, Condition: "全新", Campus: "东校区", TradeLocation: "东门"})
+
+	t.Run("non-owner forbidden", func(t *testing.T) {
+		req := &dto.UpdateProductRequest{Title: "新标题", Price: 20, Condition: "九成新", TradeLocation: "西门", Revision: 0}
+		if _, err := svc.Update(context.Background(), 99, created.ID, req); err == nil {
+			t.Fatalf("expected forbidden error for non-owner")
+		}
+	})
+
+	t.Run("first edit applies and bumps revision", func(t *testing.T) {
+		req := &dto.UpdateProductRequest{Title: "新标题", Description: "新说明", Price: 20, Condition: "九成新", TradeLocation: "西门", Revision: 0}
+		updated, err := svc.Update(context.Background(), 1, created.ID, req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if updated.Title != "新标题" || updated.Price != 20 || updated.Revision != 1 {
+			t.Fatalf("edit not applied: %+v", updated)
+		}
+	})
+
+	t.Run("stale revision rejected and newest returned", func(t *testing.T) {
+		req := &dto.UpdateProductRequest{Title: "覆盖别人", Price: 30, Condition: "全新", TradeLocation: "南门", Revision: 0}
+		_, err := svc.Update(context.Background(), 1, created.ID, req)
+		if err == nil {
+			t.Fatalf("expected conflict error for stale revision")
+		}
+		var appErr *util.AppError
+		if !errors.As(err, &appErr) || appErr.Data == nil {
+			t.Fatalf("expected AppError carrying latest product, got %v", err)
+		}
+		latest := appErr.Data.(*model.Product)
+		if latest.Revision != 1 || latest.Title != "新标题" {
+			t.Fatalf("expected newest version in data, got %+v", latest)
+		}
+	})
+
+	t.Run("edit closed after take-down", func(t *testing.T) {
+		if _, err := svc.Remove(context.Background(), 1, created.ID); err != nil {
+			t.Fatalf("remove failed: %v", err)
+		}
+		req := &dto.UpdateProductRequest{Title: "还想改", Price: 5, Condition: "全新", TradeLocation: "北门", Revision: 1}
+		if _, err := svc.Update(context.Background(), 1, created.ID, req); err == nil {
+			t.Fatalf("expected conflict error for removed product")
+		}
+	})
 }

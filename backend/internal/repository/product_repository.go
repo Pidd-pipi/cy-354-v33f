@@ -33,9 +33,12 @@ func (r *ProductRepository) FindByID(ctx context.Context, id uint) (*model.Produ
 	return &p, nil
 }
 
-// List filters products by category/campus/keyword/status with pagination.
-func (r *ProductRepository) List(ctx context.Context, category, campus, keyword, status string, page, pageSize int) ([]model.Product, int64, error) {
+// List filters products by seller/category/campus/keyword/status with pagination.
+func (r *ProductRepository) List(ctx context.Context, sellerID uint, category, campus, keyword, status string, page, pageSize int) ([]model.Product, int64, error) {
 	q := db(ctx, r.db).Model(&model.Product{})
+	if sellerID != 0 {
+		q = q.Where("seller_id = ?", sellerID)
+	}
 	if category != "" {
 		q = q.Where("category = ?", category)
 	}
@@ -68,6 +71,23 @@ func (r *ProductRepository) UpdateStatus(ctx context.Context, id uint, status st
 	}
 	if res.RowsAffected == 0 {
 		return util.ErrNotFound
+	}
+	return nil
+}
+
+// UpdateWithRevision applies an optimistic-lock edit: the UPDATE only matches
+// while the stored revision equals expectedRevision and the product is still
+// on sale. RowsAffected == 0 means the row was edited or taken down elsewhere.
+func (r *ProductRepository) UpdateWithRevision(ctx context.Context, id, expectedRevision uint, fields map[string]interface{}) error {
+	fields["revision"] = gorm.Expr("revision + 1")
+	res := db(ctx, r.db).Model(&model.Product{}).
+		Where("id = ? AND revision = ? AND status = ?", id, expectedRevision, "on_sale").
+		Updates(fields)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return util.ErrConflict
 	}
 	return nil
 }

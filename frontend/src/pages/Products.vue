@@ -19,7 +19,14 @@
     </el-form>
     <el-row :gutter="16">
       <el-col v-for="p in products" :key="p.id" :span="6" class="col">
-        <ProductCard :product="p" @detail="showDetail" @buy="buy" @chat="chat" />
+        <ProductCard
+          :product="p"
+          :can-edit="p.seller_id === authStore.user?.id"
+          @detail="showDetail"
+          @buy="buy"
+          @chat="chat"
+          @edit="openEdit"
+        />
       </el-col>
     </el-row>
     <el-empty v-if="!loading && products.length === 0" description="暂无商品" />
@@ -34,16 +41,33 @@
         <el-descriptions-item label="描述" :span="2">{{ current.description }}</el-descriptions-item>
       </el-descriptions>
     </el-dialog>
+    <el-dialog v-model="editVisible" title="编辑在售商品" width="520px">
+      <ProductForm v-if="editing" ref="editFormRef" mode="edit" :product="editing" />
+      <el-alert
+        v-if="editConflict"
+        :title="'内容已在别处被修改，已为你载入最新版本，请确认后重新保存'"
+        type="warning"
+        :closable="false"
+        class="conflict-tip"
+      />
+      <template #footer>
+        <el-button @click="editVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="saveEdit">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import axios from 'axios'
 import ProductCard from '../components/common/ProductCard.vue'
+import ProductForm from '../components/common/ProductForm.vue'
 import { PRODUCT_CATEGORIES, categoryLabel, productStatusLabel } from '../constants/product'
 import { useProducts } from '../hooks/useProducts'
 import { createTradeOrder } from '../api/tradeOrder'
+import { updateProduct } from '../api/product'
 import { createConversation } from '../api/conversation'
 import type { Product } from '../types'
 import { useAuthStore } from '../stores/authStore'
@@ -56,9 +80,74 @@ const current = ref<Product | null>(null)
 const authStore = useAuthStore()
 const router = useRouter()
 
+const editVisible = ref(false)
+const editing = ref<Product | null>(null)
+const editFormRef = ref<InstanceType<typeof ProductForm>>()
+const saving = ref(false)
+const editConflict = ref(false)
+// Revision observed when the edit dialog was opened; echoed unchanged on retry.
+const openedRevision = ref(0)
+
 function showDetail(p: Product) {
   current.value = p
   detailVisible.value = true
+}
+
+function openEdit(p: Product) {
+  editing.value = { ...p }
+  openedRevision.value = p.revision
+  editConflict.value = false
+  editVisible.value = true
+}
+
+function replaceInList(p: Product) {
+  const idx = products.value.findIndex((item) => item.id === p.id)
+  if (idx >= 0) products.value[idx] = p
+  if (current.value?.id === p.id) current.value = p
+}
+
+async function saveEdit() {
+  const target = editing.value
+  const form = editFormRef.value?.form
+  if (!target || !form) return
+  if (!form.title || !form.condition || !form.trade_location || form.price <= 0) {
+    ElMessage.warning('请填写完整信息')
+    return
+  }
+  saving.value = true
+  try {
+    const res = await updateProduct(target.id, {
+      title: form.title,
+      description: form.description,
+      price: form.price,
+      condition: form.condition,
+      trade_location: form.trade_location,
+      revision: openedRevision.value,
+    })
+    replaceInList(res.data)
+    editing.value = res.data
+    openedRevision.value = res.data.revision
+    editVisible.value = false
+    ElMessage.success('已保存')
+  } catch (e) {
+    // 409: another save landed first, or the product was sold/taken down.
+    // The backend refuses the overwrite and returns the newest version in data.
+    if (axios.isAxiosError(e) && e.response?.status === 409) {
+      const latest = e.response.data?.data as Product | undefined
+      if (latest) {
+        editing.value = latest
+        openedRevision.value = latest.revision
+        replaceInList(latest)
+        editConflict.value = true
+      } else {
+        ElMessage.error(e.response.data?.message || '保存失败')
+        editVisible.value = false
+        await load()
+      }
+    }
+  } finally {
+    saving.value = false
+  }
 }
 
 async function buy(p: Product) {
@@ -91,5 +180,8 @@ onMounted(() => load())
 }
 .col {
   margin-bottom: 16px;
+}
+.conflict-tip {
+  margin-top: 8px;
 }
 </style>

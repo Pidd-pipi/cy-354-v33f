@@ -5,9 +5,21 @@
       <div class="order-row">
         <div>
           <TradeStatusBadge :status="o.status" />
-          <span class="order-id">订单 #{{ o.id }} · 商品 #{{ o.product_id }}</span>
+          <span class="order-id">订单 #{{ o.id }} · {{ productMap[o.product_id]?.title ?? `商品 #${o.product_id}` }}</span>
+          <el-tag
+            v-if="productMap[o.product_id]"
+            :type="productStatusType(productMap[o.product_id].status) as any"
+            size="small"
+            class="product-status"
+          >{{ productStatusLabel(productMap[o.product_id].status) }}</el-tag>
           <p class="order-meta">
             买家 #{{ o.buyer_id }} / 卖家 #{{ o.seller_id }} · {{ formatDateTime(o.created_at) }}
+          </p>
+          <p class="order-price">
+            成交价（下单时冻结）：<span class="price">¥{{ o.price.toFixed(2) }}</span>
+            <span v-if="priceChanged(o)" class="price-hint">
+              商品当前售价 ¥{{ productMap[o.product_id].price.toFixed(2) }}，本订单不受影响
+            </span>
           </p>
         </div>
         <div class="order-actions">
@@ -42,35 +54,69 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import TradeStatusBadge from '../components/common/TradeStatusBadge.vue'
+import { storeToRefs } from 'pinia'
 import { useTradeStore } from '../stores/tradeStore'
 import { useAuthStore } from '../stores/authStore'
-import { buyerConfirm, sellerConfirm, cancelTradeOrder } from '../api/tradeOrder'
+import { buyerConfirm as buyerConfirmApi, sellerConfirm as sellerConfirmApi, cancelTradeOrder as cancelApi } from '../api/tradeOrder'
+import { getProduct } from '../api/product'
 import { createReview } from '../api/review'
 import { REVIEW_RATINGS } from '../constants/trade'
+import { productStatusLabel, productStatusType } from '../constants/product'
 import { formatDateTime } from '../utils/dateFormat'
-import type { TradeOrder } from '../types'
+import type { Product, TradeOrder } from '../types'
 
-const { orders, fetch } = useTradeStore()
+const tradeStore = useTradeStore()
+const { orders } = storeToRefs(tradeStore)
+const { fetch } = tradeStore
 const authStore = useAuthStore()
 const reviewVisible = ref(false)
 const reviewForm = reactive({ trade_id: 0, rating: 'good', content: '' })
 
-async function buyerConfirmFn(id: number) {
-  await buyerConfirm(id)
+// Snapshot of product rows keyed by id, used to show the current title/status
+// next to the order. The order price itself is frozen and never refetched.
+const productMap = ref<Record<number, Product>>({})
+
+async function loadProducts() {
+  const ids = [...new Set(orders.value.map((o) => o.product_id))]
+  const entries = await Promise.all(
+    ids.map(async (id) => {
+      try {
+        const res = await getProduct(id)
+        return [id, res.data] as const
+      } catch {
+        return null
+      }
+    }),
+  )
+  productMap.value = Object.fromEntries(entries.filter(Boolean) as [number, Product][])
+}
+
+function priceChanged(o: TradeOrder): boolean {
+  const p = productMap.value[o.product_id]
+  return !!p && Math.abs(p.price - o.price) > 0.001
+}
+
+async function refresh() {
+  await fetch()
+  await loadProducts()
+}
+
+async function buyerConfirm(id: number) {
+  await buyerConfirmApi(id)
   ElMessage.success('已确认收货')
-  await fetch()
+  await refresh()
 }
 
-async function sellerConfirmFn(id: number) {
-  await sellerConfirm(id)
+async function sellerConfirm(id: number) {
+  await sellerConfirmApi(id)
   ElMessage.success('交易完成')
-  await fetch()
+  await refresh()
 }
 
-async function cancelFn(id: number) {
-  await cancelTradeOrder(id)
+async function cancel(id: number) {
+  await cancelApi(id)
   ElMessage.success('已取消')
-  await fetch()
+  await refresh()
 }
 
 function reviewDialog(o: TradeOrder) {
@@ -86,7 +132,7 @@ async function submitReview() {
   reviewVisible.value = false
 }
 
-onMounted(fetch)
+onMounted(refresh)
 </script>
 
 <style scoped>
@@ -107,5 +153,22 @@ onMounted(fetch)
   color: #909399;
   font-size: 12px;
   margin: 6px 0 0;
+}
+.product-status {
+  margin-left: 8px;
+}
+.order-price {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #606266;
+}
+.order-price .price {
+  color: #f56c6c;
+  font-weight: 700;
+}
+.price-hint {
+  margin-left: 8px;
+  color: #909399;
+  font-size: 12px;
 }
 </style>

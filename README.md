@@ -131,13 +131,19 @@ cy-354/
   - 数据重置：`docker compose down -v` 后重新 `up -d`。
   - 中文目录名：Compose 通过项目名与容器名隔离，任意目录下均可启动。
 
+## 在售商品编辑与价格冻结
+
+- **在售商品可直接编辑**：卖家可修改标题、说明、价格、成色、面交地点（分类/校区/图片随商品固化，编辑页不展示），无需下架重发；商品一旦售出或下架，编辑入口立即关闭。
+- **乐观锁防覆盖**：商品带 `revision` 修订号，打开编辑页时记录当前值，保存时随表单回传；后端仅在 `id + revision + status=on_sale` 全部匹配时才落库并把 `revision + 1`。若期间已被别处改动，返回 `409` 并在响应 `data` 中带回最新商品，前端据此载入最新内容，拒绝覆盖他人改动。
+- **下单冻结价格**：买家下单时把当时商品价格快照写入订单 `trade_orders.price`，卖家之后调价只影响商品当前价与新订单，已有订单始终按下单时价格展示；「我的交易」同时展示商品当前标题/状态，价格变动时提示「本订单不受影响」。
+
 ## API 说明
 
 - 统一前缀 `/api/v1`，健康检查 `/healthz`。
 - 响应格式：`{ "code": 0, "message": "ok", "data": ... }`，错误码见 `backend/internal/constants/error_codes.go`。
 - 核心接口：
   - `POST /api/v1/users/register`、`POST /api/v1/users/login`、`GET/PUT /api/v1/users/me`
-  - `GET/POST /api/v1/products`、`GET/DELETE /api/v1/products/:id`、`GET /api/v1/products/graduation`
+  - `GET/POST /api/v1/products`、`GET/PUT/DELETE /api/v1/products/:id`、`GET /api/v1/products/graduation`
   - `POST /api/v1/conversations`、`GET /api/v1/conversations/me`、`GET/POST /api/v1/conversations/:id/messages`
   - `POST /api/v1/trade-orders`、`GET /api/v1/trade-orders/me`、`POST /api/v1/trade-orders/:id/buyer-confirm|seller-confirm|cancel`
   - `POST /api/v1/reviews`、`GET /api/v1/reviews/me`
@@ -159,6 +165,7 @@ cy-354/
 | GET | `/api/v1/products/graduation` | 毕业季专场列表 | 无 |
 | GET | `/api/v1/products/:id` | 商品详情 | 无 |
 | POST | `/api/v1/products` | 发布商品 | 登录 |
+| PUT | `/api/v1/products/:id` | 编辑在售商品（标题/说明/价格/成色/面交地点，乐观锁 revision） | 登录（卖家） |
 | DELETE | `/api/v1/products/:id` | 下架自己的商品 | 登录 |
 | POST | `/api/v1/conversations` | 发起/复用私信会话 | 登录 |
 | GET | `/api/v1/conversations/me` | 我的会话列表 | 登录 |

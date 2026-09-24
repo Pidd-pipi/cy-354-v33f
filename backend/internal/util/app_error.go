@@ -21,6 +21,7 @@ type AppError struct {
 	Status  int
 	Code    int
 	Message string
+	Data    interface{}
 	Cause   error
 }
 
@@ -36,6 +37,12 @@ func (e *AppError) Unwrap() error { return e.Cause }
 // NewAppError builds an AppError with an optional underlying cause.
 func NewAppError(status, code int, message string, cause error) *AppError {
 	return &AppError{Status: status, Code: code, Message: message, Cause: cause}
+}
+
+// NewAppErrorWithData builds an AppError that also carries a payload (for
+// example the newest version of a resource rejected by an optimistic lock).
+func NewAppErrorWithData(status, code int, message string, data interface{}) *AppError {
+	return &AppError{Status: status, Code: code, Message: message, Data: data}
 }
 
 // WrapAppError rewraps err into an AppError keeping the chain alive.

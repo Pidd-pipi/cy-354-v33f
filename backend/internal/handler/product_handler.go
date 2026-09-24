@@ -44,6 +44,31 @@ func (h *ProductHandler) Create(c *gin.Context) {
 	util.OK(c, p)
 }
 
+// Update handles PUT /products/:id.
+func (h *ProductHandler) Update(c *gin.Context) {
+	userID, err := middleware.CurrentUserID(c)
+	if err != nil {
+		util.Fail(c, http.StatusUnauthorized, constants.CodeUnauthorized, constants.MsgUnauthorized)
+		return
+	}
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		util.Fail(c, http.StatusBadRequest, constants.CodeBadRequest, "商品ID不合法")
+		return
+	}
+	var req dto.UpdateProductRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		util.Fail(c, http.StatusBadRequest, constants.CodeValidation, constants.MsgValidationFailed)
+		return
+	}
+	p, err := h.svc.Update(c.Request.Context(), userID, uint(id), &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	util.OK(c, p)
+}
+
 // Get handles GET /products/:id.
 func (h *ProductHandler) Get(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)

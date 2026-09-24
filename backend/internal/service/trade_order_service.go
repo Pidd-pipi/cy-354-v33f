@@ -43,6 +43,8 @@ func (s *TradeOrderService) Create(ctx context.Context, buyer *model.User, req *
 	}
 	order := &model.TradeOrder{
 		ProductID: req.ProductID, BuyerID: buyer.ID, SellerID: product.SellerID,
+		// Snapshot the current price so later seller edits never move existing orders.
+		Price:  product.Price,
 		Status: constants.TradeStatusPending,
 	}
 	if err := s.orders.Create(ctx, order); err != nil {

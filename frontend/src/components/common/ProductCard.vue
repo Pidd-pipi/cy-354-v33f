@@ -13,6 +13,7 @@
     </div>
     <div class="product-actions">
       <el-button size="small" @click="$emit('detail', product)">详情</el-button>
+      <el-button v-if="canEdit && product.status === 'on_sale'" size="small" type="warning" @click="$emit('edit', product)">编辑</el-button>
       <el-button v-if="!hideBuy" size="small" type="primary" :disabled="product.status !== 'on_sale'" @click="$emit('buy', product)">购买</el-button>
       <el-button v-if="showChat" size="small" @click="$emit('chat', product)">私信</el-button>
     </div>
@@ -23,8 +24,8 @@
 import type { Product } from '../../types'
 import { categoryLabel, productStatusLabel, productStatusType } from '../../constants/product'
 
-withDefaults(defineProps<{ product: Product; hideBuy?: boolean; showChat?: boolean }>(), { hideBuy: false, showChat: false })
-defineEmits<{ (e: 'detail', p: Product): void; (e: 'buy', p: Product): void; (e: 'chat', p: Product): void }>()
+withDefaults(defineProps<{ product: Product; hideBuy?: boolean; showChat?: boolean; canEdit?: boolean }>(), { hideBuy: false, showChat: false, canEdit: false })
+defineEmits<{ (e: 'detail', p: Product): void; (e: 'buy', p: Product): void; (e: 'chat', p: Product): void; (e: 'edit', p: Product): void }>()
 </script>
 
 <style scoped>

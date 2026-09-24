@@ -20,7 +20,11 @@ func ErrorHandler() gin.HandlerFunc {
 		var appErr *util.AppError
 		switch {
 		case errors.As(err, &appErr):
-			util.Fail(c, appErr.Status, appErr.Code, appErr.Message)
+			if appErr.Data != nil {
+				util.FailWithData(c, appErr.Status, appErr.Code, appErr.Message, appErr.Data)
+			} else {
+				util.Fail(c, appErr.Status, appErr.Code, appErr.Message)
+			}
 		case errors.Is(err, util.ErrNotFound):
 			util.Fail(c, http.StatusNotFound, constants.CodeNotFound, constants.MsgNotFound)
 		case errors.Is(err, util.ErrConflict):

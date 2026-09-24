@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -15,8 +16,9 @@ import (
 type ProductRepository interface {
 	Create(ctx context.Context, p *model.Product) error
 	FindByID(ctx context.Context, id uint) (*model.Product, error)
-	List(ctx context.Context, category, campus, keyword, status string, page, pageSize int) ([]model.Product, int64, error)
+	List(ctx context.Context, sellerID uint, category, campus, keyword, status string, page, pageSize int) ([]model.Product, int64, error)
 	UpdateStatus(ctx context.Context, id uint, status string) error
+	UpdateWithRevision(ctx context.Context, id, expectedRevision uint, fields map[string]interface{}) error
 	Count(ctx context.Context) (int64, error)
 }
 
@@ -50,6 +52,45 @@ func (s *ProductService) Create(ctx context.Context, sellerID uint, req *dto.Cre
 	return p, nil
 }
 
+// Update edits the seller-facing fields of an on-sale product. The caller must
+// echo the revision it last observed; when the product was changed elsewhere
+// (or sold/taken down), the save is refused and the newest version is returned
+// in the AppError data so no other edit is silently overwritten.
+func (s *ProductService) Update(ctx context.Context, sellerID, productID uint, req *dto.UpdateProductRequest) (*model.Product, error) {
+	p, err := s.products.FindByID(ctx, productID)
+	if err != nil {
+		return nil, util.WrapAppError(fmt.Errorf("product[id=%d] update find: %w", productID, err), 404, constants.CodeNotFound, constants.MsgNotFound)
+	}
+	if p.SellerID != sellerID {
+		return nil, util.NewAppError(403, constants.CodeForbidden, constants.MsgForbidden, nil)
+	}
+	if p.Status != constants.ProductStatusOnSale {
+		latest, _ := s.products.FindByID(ctx, productID)
+		return nil, util.NewAppErrorWithData(409, constants.CodeConflict, constants.MsgProductNotEditable, latest)
+	}
+	fields := map[string]interface{}{
+		"title": req.Title, "description": req.Description, "price": req.Price,
+		"condition": req.Condition, "trade_location": req.TradeLocation,
+	}
+	if err := s.products.UpdateWithRevision(ctx, productID, req.Revision, fields); err != nil {
+		if errors.Is(err, util.ErrConflict) {
+			latest, findErr := s.products.FindByID(ctx, productID)
+			if findErr != nil {
+				return nil, util.WrapAppError(fmt.Errorf("product[id=%d] update reload: %w", productID, findErr), 404, constants.CodeNotFound, constants.MsgNotFound)
+			}
+			s.logger.Info(fmt.Sprintf(constants.LogProductUpdateConflict, productID, req.Revision, latest.Revision))
+			return nil, util.NewAppErrorWithData(409, constants.CodeConflict, constants.MsgProductRevisionStale, latest)
+		}
+		return nil, util.WrapAppError(fmt.Errorf("product[id=%d] update: %w", productID, err), 500, constants.CodeInternalError, constants.MsgInternalError)
+	}
+	updated, err := s.products.FindByID(ctx, productID)
+	if err != nil {
+		return nil, util.WrapAppError(fmt.Errorf("product[id=%d] update reload: %w", productID, err), 500, constants.CodeInternalError, constants.MsgInternalError)
+	}
+	s.logger.Info(fmt.Sprintf(constants.LogProductUpdateSuccess, productID, updated.Revision))
+	return updated, nil
+}
+
 // Get returns one product.
 func (s *ProductService) Get(ctx context.Context, id uint) (*model.Product, error) {
 	p, err := s.products.FindByID(ctx, id)
@@ -62,7 +103,7 @@ func (s *ProductService) Get(ctx context.Context, id uint) (*model.Product, erro
 // List filters products.
 func (s *ProductService) List(ctx context.Context, q *dto.ListProductQuery) (*dto.PageResult, error) {
 	q.Normalize()
-	items, total, err := s.products.List(ctx, q.Category, q.Campus, q.Keyword, q.Status, q.Page, q.PageSize)
+	items, total, err := s.products.List(ctx, q.SellerID, q.Category, q.Campus, q.Keyword, q.Status, q.Page, q.PageSize)
 	if err != nil {
 		return nil, util.WrapAppError(fmt.Errorf("product list: %w", err), 500, constants.CodeInternalError, constants.MsgInternalError)
 	}

@@ -18,3 +18,8 @@ func OK(c *gin.Context, data interface{}) {
 func Fail(c *gin.Context, status, code int, message string) {
 	c.JSON(status, Response{Code: code, Message: message, Data: nil})
 }
+
+// FailWithData writes an error response carrying an additional payload.
+func FailWithData(c *gin.Context, status, code int, message string, data interface{}) {
+	c.JSON(status, Response{Code: code, Message: message, Data: data})
+}

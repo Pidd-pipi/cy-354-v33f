@@ -15,6 +15,7 @@ func RegisterProductRoutes(g *gin.RouterGroup, h *handler.ProductHandler, auth, 
 		authed := products.Group("", auth)
 		{
 			authed.POST("", apiLimiter, h.Create)
+			authed.PUT("/:id", apiLimiter, h.Update)
 			authed.DELETE("/:id", apiLimiter, h.Remove)
 		}
 	}
