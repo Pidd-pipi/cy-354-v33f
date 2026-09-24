@@ -137,7 +137,7 @@ cy-354/
 - 响应格式：`{ "code": 0, "message": "ok", "data": ... }`，错误码见 `backend/internal/constants/error_codes.go`。
 - 核心接口：
   - `POST /api/v1/users/register`、`POST /api/v1/users/login`、`GET/PUT /api/v1/users/me`
-  - `GET/POST /api/v1/products`、`GET/DELETE /api/v1/products/:id`、`GET /api/v1/products/graduation`
+  - `GET/POST /api/v1/products`、`GET/PUT/DELETE /api/v1/products/:id`、`GET /api/v1/products/graduation`
   - `POST /api/v1/conversations`、`GET /api/v1/conversations/me`、`GET/POST /api/v1/conversations/:id/messages`
   - `POST /api/v1/trade-orders`、`GET /api/v1/trade-orders/me`、`POST /api/v1/trade-orders/:id/buyer-confirm|seller-confirm|cancel`
   - `POST /api/v1/reviews`、`GET /api/v1/reviews/me`
@@ -159,12 +159,13 @@ cy-354/
 | GET | `/api/v1/products/graduation` | 毕业季专场列表 | 无 |
 | GET | `/api/v1/products/:id` | 商品详情 | 无 |
 | POST | `/api/v1/products` | 发布商品 | 登录 |
+| PUT | `/api/v1/products/:id` | 编辑在售商品（标题/说明/价格/成色/交易地点，携带 version 乐观锁；409 时 data 返回最新商品） | 登录（本人） |
 | DELETE | `/api/v1/products/:id` | 下架自己的商品 | 登录 |
 | POST | `/api/v1/conversations` | 发起/复用私信会话 | 登录 |
 | GET | `/api/v1/conversations/me` | 我的会话列表 | 登录 |
 | GET | `/api/v1/conversations/:id/messages` | 会话消息记录 | 登录 |
 | POST | `/api/v1/conversations/:id/messages` | 发送私信 | 登录 |
-| POST | `/api/v1/trade-orders` | 创建购买订单 | 登录 |
+| POST | `/api/v1/trade-orders` | 创建购买订单（冻结下单时价格，后续调价不影响） | 登录 |
 | GET | `/api/v1/trade-orders/me` | 我的订单列表 | 登录 |
 | POST | `/api/v1/trade-orders/:id/buyer-confirm` | 买家确认 | 登录 |
 | POST | `/api/v1/trade-orders/:id/seller-confirm` | 卖家确认（订单完成+商品售出） | 登录 |

@@ -43,12 +43,12 @@ func (s *TradeOrderService) Create(ctx context.Context, buyer *model.User, req *
 	}
 	order := &model.TradeOrder{
 		ProductID: req.ProductID, BuyerID: buyer.ID, SellerID: product.SellerID,
-		Status: constants.TradeStatusPending,
+		Price: product.Price, Status: constants.TradeStatusPending,
 	}
 	if err := s.orders.Create(ctx, order); err != nil {
 		return nil, util.WrapAppError(fmt.Errorf("trade_order[buyer=%d] create: %w", buyer.ID, err), 500, constants.CodeInternalError, constants.MsgInternalError)
 	}
-	s.logger.Info(fmt.Sprintf(constants.LogTradeOrderCreateSuccess, order.ID, req.ProductID))
+	s.logger.Info(fmt.Sprintf(constants.LogTradeOrderCreateSuccess, order.ID, req.ProductID, order.Price))
 	return order, nil
 }
 

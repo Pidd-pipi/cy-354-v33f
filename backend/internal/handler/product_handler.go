@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -72,6 +73,37 @@ func (h *ProductHandler) List(c *gin.Context) {
 		return
 	}
 	util.OK(c, result)
+}
+
+// Update handles PUT /products/:id. On a stale revision it responds 409 with
+// the latest product in data so the client never overwrites someone else's edit.
+func (h *ProductHandler) Update(c *gin.Context) {
+	userID, err := middleware.CurrentUserID(c)
+	if err != nil {
+		util.Fail(c, http.StatusUnauthorized, constants.CodeUnauthorized, constants.MsgUnauthorized)
+		return
+	}
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		util.Fail(c, http.StatusBadRequest, constants.CodeBadRequest, "商品ID不合法")
+		return
+	}
+	var req dto.UpdateProductRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		util.Fail(c, http.StatusBadRequest, constants.CodeValidation, constants.MsgValidationFailed)
+		return
+	}
+	p, err := h.svc.Update(c.Request.Context(), userID, uint(id), &req)
+	if err != nil {
+		var conflict *service.EditConflictError
+		if errors.As(err, &conflict) {
+			util.FailWithData(c, http.StatusConflict, constants.CodeConflict, constants.MsgProductEditConflict, conflict.Latest)
+			return
+		}
+		c.Error(err)
+		return
+	}
+	util.OK(c, p)
 }
 
 // Remove handles DELETE /products/:id.

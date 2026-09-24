@@ -6,14 +6,15 @@
         <div>
           <TradeStatusBadge :status="o.status" />
           <span class="order-id">订单 #{{ o.id }} · 商品 #{{ o.product_id }}</span>
+          <span class="order-price">成交价 ¥{{ o.price.toFixed(2) }}</span>
           <p class="order-meta">
             买家 #{{ o.buyer_id }} / 卖家 #{{ o.seller_id }} · {{ formatDateTime(o.created_at) }}
           </p>
         </div>
         <div class="order-actions">
-          <el-button v-if="o.status === 'pending' && o.buyer_id === authStore.user?.id" size="small" type="primary" @click="buyerConfirm(o.id)">确认收货</el-button>
-          <el-button v-if="o.status === 'confirmed' && o.seller_id === authStore.user?.id" size="small" type="success" @click="sellerConfirm(o.id)">确认收款</el-button>
-          <el-button v-if="o.status === 'pending'" size="small" type="danger" @click="cancel(o.id)">取消</el-button>
+          <el-button v-if="o.status === 'pending' && o.buyer_id === authStore.user?.id" size="small" type="primary" @click="buyerConfirmFn(o.id)">确认收货</el-button>
+          <el-button v-if="o.status === 'confirmed' && o.seller_id === authStore.user?.id" size="small" type="success" @click="sellerConfirmFn(o.id)">确认收款</el-button>
+          <el-button v-if="o.status === 'pending'" size="small" type="danger" @click="cancelFn(o.id)">取消</el-button>
           <el-button v-if="o.status === 'completed'" size="small" @click="reviewDialog(o)">评价</el-button>
         </div>
       </div>
@@ -102,6 +103,12 @@ onMounted(fetch)
   margin-left: 8px;
   font-size: 13px;
   color: #606266;
+}
+.order-price {
+  margin-left: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #f56c6c;
 }
 .order-meta {
   color: #909399;

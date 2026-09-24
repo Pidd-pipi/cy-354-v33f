@@ -30,7 +30,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { reactive, watch } from 'vue'
 import { PRODUCT_CATEGORIES } from '../../constants/product'
 
 export interface ProductFormValue {
@@ -44,6 +44,8 @@ export interface ProductFormValue {
   images: string
 }
 
+const props = defineProps<{ initial?: Partial<ProductFormValue> }>()
+
 const form = reactive<ProductFormValue>({
   title: '',
   description: '',
@@ -54,6 +56,14 @@ const form = reactive<ProductFormValue>({
   trade_location: '',
   images: '',
 })
+
+watch(
+  () => props.initial,
+  (val) => {
+    if (val) Object.assign(form, val)
+  },
+  { immediate: true, deep: true },
+)
 
 defineExpose({ form })
 </script>

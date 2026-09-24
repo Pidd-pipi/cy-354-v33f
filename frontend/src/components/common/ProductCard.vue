@@ -15,6 +15,7 @@
       <el-button size="small" @click="$emit('detail', product)">详情</el-button>
       <el-button v-if="!hideBuy" size="small" type="primary" :disabled="product.status !== 'on_sale'" @click="$emit('buy', product)">购买</el-button>
       <el-button v-if="showChat" size="small" @click="$emit('chat', product)">私信</el-button>
+      <el-button v-if="showEdit && product.status === 'on_sale'" size="small" type="warning" @click="$emit('edit', product)">编辑</el-button>
     </div>
   </el-card>
 </template>
@@ -23,8 +24,8 @@
 import type { Product } from '../../types'
 import { categoryLabel, productStatusLabel, productStatusType } from '../../constants/product'
 
-withDefaults(defineProps<{ product: Product; hideBuy?: boolean; showChat?: boolean }>(), { hideBuy: false, showChat: false })
-defineEmits<{ (e: 'detail', p: Product): void; (e: 'buy', p: Product): void; (e: 'chat', p: Product): void }>()
+withDefaults(defineProps<{ product: Product; hideBuy?: boolean; showChat?: boolean; showEdit?: boolean }>(), { hideBuy: false, showChat: false, showEdit: false })
+defineEmits<{ (e: 'detail', p: Product): void; (e: 'buy', p: Product): void; (e: 'chat', p: Product): void; (e: 'edit', p: Product): void }>()
 </script>
 
 <style scoped>

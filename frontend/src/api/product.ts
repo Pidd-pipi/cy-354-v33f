@@ -22,6 +22,19 @@ export function createProduct(data: Partial<Product>) {
   return request.post<never, { code: number; message: string; data: Product }>('/products', data)
 }
 
+export interface UpdateProductPayload {
+  title: string
+  description: string
+  price: number
+  condition: string
+  trade_location: string
+  version: number
+}
+
+export function updateProduct(id: number, data: UpdateProductPayload) {
+  return request.put<never, { code: number; message: string; data: Product }>(`/products/${id}`, data)
+}
+
 export function removeProduct(id: number) {
   return request.delete<never, { code: number; message: string; data: Product }>(`/products/${id}`)
 }

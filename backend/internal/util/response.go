@@ -18,3 +18,9 @@ func OK(c *gin.Context, data interface{}) {
 func Fail(c *gin.Context, status, code int, message string) {
 	c.JSON(status, Response{Code: code, Message: message, Data: nil})
 }
+
+// FailWithData writes an error response that still carries a payload, e.g. the
+// latest row returned alongside an optimistic-lock conflict.
+func FailWithData(c *gin.Context, status, code int, message string, data interface{}) {
+	c.JSON(status, Response{Code: code, Message: message, Data: data})
+}

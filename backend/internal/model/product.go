@@ -15,5 +15,6 @@ type Product struct {
 	TradeLocation string    `gorm:"size:128" json:"trade_location"`
 	Images        string    `gorm:"type:text" json:"images"`
 	Status        string    `gorm:"size:16;index;not null;default:on_sale" json:"status"`
+	Version       uint      `gorm:"not null;default:1" json:"version"`
 	CreatedAt     time.Time `json:"created_at"`
 }

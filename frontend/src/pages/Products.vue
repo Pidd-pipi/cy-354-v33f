@@ -19,7 +19,7 @@
     </el-form>
     <el-row :gutter="16">
       <el-col v-for="p in products" :key="p.id" :span="6" class="col">
-        <ProductCard :product="p" @detail="showDetail" @buy="buy" @chat="chat" />
+        <ProductCard :product="p" :show-edit="authStore.user?.id === p.seller_id" @detail="showDetail" @buy="buy" @chat="chat" @edit="goEdit" />
       </el-col>
     </el-row>
     <el-empty v-if="!loading && products.length === 0" description="暂无商品" />
@@ -33,6 +33,9 @@
         <el-descriptions-item label="状态">{{ productStatusLabel(current.status) }}</el-descriptions-item>
         <el-descriptions-item label="描述" :span="2">{{ current.description }}</el-descriptions-item>
       </el-descriptions>
+      <template #footer v-if="current && authStore.user?.id === current.seller_id && current.status === 'on_sale'">
+        <el-button type="warning" @click="goEdit(current)">编辑</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -59,6 +62,11 @@ const router = useRouter()
 function showDetail(p: Product) {
   current.value = p
   detailVisible.value = true
+}
+
+function goEdit(p: Product) {
+  detailVisible.value = false
+  router.push(`/publish?edit=${p.id}`)
 }
 
 async function buy(p: Product) {

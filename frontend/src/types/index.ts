@@ -25,6 +25,7 @@ export interface Product {
   trade_location: string
   images: string
   status: string
+  version: number
   created_at: string
 }
 
@@ -50,6 +51,7 @@ export interface TradeOrder {
   product_id: number
   buyer_id: number
   seller_id: number
+  price: number
   status: string
   buyer_confirmed_at: string | null
   seller_confirmed_at: string | null
